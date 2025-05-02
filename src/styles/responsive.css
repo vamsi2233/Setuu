@@ -1,0 +1,42 @@
+/* Base styles */
+.main-content {
+  margin-left: 16rem; /* 64 * 4px = 256px */
+  padding-right: 20rem; /* 80 * 4px = 320px */
+  transition: all 0.3s ease;
+}
+
+/* Medium screens (1024px and below) */
+@media (max-width: 1024px) {
+  .main-content {
+    margin-left: 12rem; /* Reduce sidebar width */
+    padding-right: 16rem; /* Reduce chatbox width */
+  }
+}
+
+/* Small screens (768px and below) */
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding-right: 0;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: -100%;
+    transition: left 0.3s ease;
+  }
+
+  .sidebar.active {
+    left: 0;
+  }
+
+  .chatbox {
+    position: fixed;
+    right: -100%;
+    transition: right 0.3s ease;
+  }
+
+  .chatbox.active {
+    right: 0;
+  }
+} 

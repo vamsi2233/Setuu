@@ -1,0 +1,23 @@
+# Initialize Tailwind CSS
+npm install -D tailwindcss postcss autoprefixer
+npx tailwindcss init -p
+
+# Install ShadCN UI for UI components
+npx shadcn-ui@latest init
+
+# Install required dependencies for ShadCN UI
+npm install clsx tailwind-variants @radix-ui/react-slot
+
+# Optional (icons for buttons)
+npm install react-icons
+
+# If you're using OpenAI for GPT-based responses:
+npm install openai
+
+pip install fastapi uvicorn python-multipart pillow pdf2image openai
+
+brew install poppler
+
+sudo apt install poppler-utils
+
+pip install langchain openai langchainhub
