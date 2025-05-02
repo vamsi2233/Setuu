@@ -34,13 +34,12 @@ npm install
 yarn install
 ```
 
-3. Run the development server:
+3. Run the frontend server:
 ```bash
 npm run dev
 # or
 yarn dev
 ```
-
 4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 ## Tech Stack
@@ -52,9 +51,17 @@ yarn dev
 - [TypeScript](https://www.typescriptlang.org/) - Type safety
 - [Radix UI](https://www.radix-ui.com/) - Accessible components
 
+5. Run the backend agent server on the root directory
+ ```bash
+ uvicorn main:app --reload
+ ```
+
 ## Project Structure
 
 ```
+agent.py
+main.py
+.env
 src/
   ├── app/
   │   ├── layout.tsx
