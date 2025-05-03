@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
+import traceback
 import os
 import uuid
 from pydantic import BaseModel
@@ -49,19 +50,24 @@ async def upload_file(file: UploadFile = File(...), description: str = Form(...)
     try:
         if file_ext == "pdf":
             # Convert PDF to images
-            image_paths = convert_pdf_to_images(file_path)
+            image_paths = await convert_pdf_to_images(file_path)
         else:
             # For single image, create a list with one path
             image_paths = [file_path]
 
         # Process all images at once
-        image_base64_list = [get_base64_image(image_path) for image_path in image_paths]
-        gpt_response = process_images_with_gpt(image_base64_list, description)
+        image_base64_list = []
+        for image_path in image_paths:
+            image_base64_list.append(get_base64_image(image_path))
+            
+        gpt_response = await process_images_with_gpt(image_base64_list, description)
         
         return JSONResponse({"status": "success", "text": gpt_response})
 
     except Exception as e:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Processing failed: {e}")
+        
     finally:
         # Clean up uploaded file and temp images
         if os.path.exists(file_path):
