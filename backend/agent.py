@@ -11,8 +11,118 @@ import asyncio
 from concurrent.futures import ProcessPoolExecutor
 import aiofiles
 from io import BytesIO
+import requests
+import time
+from firecrawl import FirecrawlApp
+import json
+from urllib.parse import urlparse
+
+
 
 llm = ChatOpenAI(model="gpt-4.1-mini", temperature=.3) 
+
+def save_llms_data(url):
+    try:
+        # Extract domain from URL
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+
+        # Construct the Firecrawl URL
+        firecrawl_url = f"https://llmstxt.firecrawl.dev/{domain}/full"
+        print(f"Fetching content from: {firecrawl_url}")
+
+        # Fetch content using requests
+        response = requests.get(firecrawl_url)
+        response.raise_for_status()
+
+        # Save content to llms.txt
+        with open("llms.txt", "w", encoding="utf-8") as f:
+            f.write(f"Domain: {domain}\n\n")
+            f.write(response.text)
+
+        print("Data saved to llms.txt")
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching data: {e}")
+
+
+
+
+
+def url_agent(url: str):
+    
+    # firecrawl_llm_txt(url)
+    save_llms_data(url)
+    # Step 2: Read SOP rules
+    with open("web_sop.txt", "r") as f:    sop_rules = f.read()
+
+    # Step 3: Read website content
+    with open("llms.txt", "r") as f:   website_content = f.read()
+
+    # print("sop_rules\n", sop_rules, "\n\n ")
+    # print("website_content\n", website_content, "\n\n")
+    # Step 4: Prepare prompt for LLM
+    prompt = f"""
+    You are an SOP compliance checker.
+
+    **Standard Operating Procedure (SOP) Rules:**
+    {sop_rules}
+
+    **Website Content Overview from {url}:**
+    {website_content}
+
+    **Task:** Based on the provided SOP rules, analyze the content from the website and determine if it fully complies with the rules specified. 
+    Please evaluate each rule carefully and provide a JSON response that details the outcome of your evaluation.
+
+    **Response Format (Strictly in JSON):**
+    {{
+        "sop_rule": "<SOP Rule Name>",
+        "status": "<success or failure>",
+        "violations": [<List of descriptions for each violation, if any>]
+    }}
+
+    1. **sop_rule**: The name or description of the SOP rule being checked.
+    2. **status**: Should be either `"success"` (if the rule is satisfied) or `"failure"` (if the rule is violated).
+    3. **violations**: A list of violation descriptions (only included if the status is `"failure"`).
+
+    **Example:**
+    If the website does not comply with a rule:
+    {{
+        "sop_rule": "Validate Structure",
+        "status": "failure",
+        "violations": [
+            "Missing domain reference in the llms.txt file.",
+            "The 'Contact Us' page is not included in the website content."
+        ]
+    }}
+
+    If the website fully complies with the SOP rule:
+    [{{
+        "sop_rule": "Validate Structure",
+        "status": "success",
+        "violations": []
+    }}, ...
+    ]
+    Please proceed to evaluate the website's content against the SOP rules and provide your response strictly in the format shown above.
+    """
+
+
+    # Step 5: Query LLM
+    response = llm.invoke(prompt)
+
+    # print(response.content)
+
+    result = json.loads(response.content)
+    # result = response.content
+    return result
+
+
+
+
+
+
+
+
 
 def chat_agent(query):
     messages = [
@@ -266,7 +376,15 @@ async def process_images_with_gpt(image_base64_list, description):
         print(f"Error processing images with GPT: {e}")
         return None
 
+
+
+
 # Main execution
+# save_llms_data("https://www.lawmatrix.ai/")
+# print(url_agent("https://www.lawmatrix.ai/"))
+# print(summarize_llms_data())
+# firecrawl_llm_txt("https://docs.firecrawl.dev/api-reference/endpoint/batch-scrape")
+
 # pdf_path = "/Users/vamsi/Desktop/projects/LangGraph_projects/document_extractor/documents/AOA + GST.pdf"
 # image_paths = convert_pdf_to_images(pdf_path)
 

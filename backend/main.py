@@ -6,10 +6,16 @@ import traceback
 import os
 import uuid
 from pydantic import BaseModel
-from agent import get_base64_image, process_images_with_gpt, convert_pdf_to_images, chat_agent
+from backend.agent import get_base64_image, process_images_with_gpt, convert_pdf_to_images, chat_agent, url_agent, save_llms_data
+from dotenv import load_dotenv
+load_dotenv()
 
 class ChatRequest(BaseModel):
     query: str
+
+class URLRequest(BaseModel):
+    url: str
+
 
 app = FastAPI()
 
@@ -25,6 +31,11 @@ app.add_middleware(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+@app.post("/url")
+async def url_check(req: URLRequest):
+    response_message = url_agent(req.url)
+    print(response_message)
+    return {"message": response_message}
 
 @app.post("/chat")
 async def chat(request: ChatRequest):

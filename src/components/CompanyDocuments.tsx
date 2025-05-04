@@ -21,6 +21,12 @@ interface ExtractedText {
   documents: DocumentResponse;
 }
 
+interface UrlCheckResult {
+  "sop rule": string;
+  status: string;
+  violations: string[];
+}
+
 const CompanyDocuments = () => {
   const [gstSubmitted, setgstSubmitted] = useState(false);
   const [proofSubmitted, setproofSubmitted] = useState(false);
@@ -36,6 +42,12 @@ const CompanyDocuments = () => {
   const [gstSaved, setGstSaved] = useState(false);
   const [proofSaved, setProofSaved] = useState(false);
   const [chatContext, setChatContext] = useState<string | null>(null);
+  const [companyUrl, setCompanyUrl] = useState('');
+  const [urlUploading, setUrlUploading] = useState(false);
+  const [urlExtractedText, setUrlExtractedText] = useState<UrlCheckResult[] | null>(null);
+  const [urlSubmitted, setUrlSubmitted] = useState(false);
+  const [urlSaved, setUrlSaved] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'gst' | 'proof') => {
     const file = event.target.files?.[0];
@@ -84,7 +96,7 @@ const CompanyDocuments = () => {
               setUploadError("Error parsing the response");
             }
           } else {
-            setUploadError("No text extracted or an error occurred.");
+            setUploadError("No gst text extracted or an error occurred.");
           }
         } else {
           setUploadError("Error: Something went wrong.");
@@ -133,7 +145,7 @@ const CompanyDocuments = () => {
               setUploadError("Error parsing the response");
             }
           } else {
-            setUploadError("No text extracted or an error occurred.");
+            setUploadError("No proof of business text extracted or an error occurred.");
           }
         } else {
           setUploadError("Error: Something went wrong.");
@@ -150,11 +162,9 @@ const CompanyDocuments = () => {
   const handleSave = (section: 'gst' | 'proof') => {
     if (section === 'gst') {
       setGstSaved(true);
-      // Reset verification display
       setgstSubmitted(false);
     } else {
       setProofSaved(true);
-      // Reset verification display
       setproofSubmitted(false);
     }
   };
@@ -167,6 +177,39 @@ const CompanyDocuments = () => {
     
     const context = `I uploaded ${fileName} as ${documentTypeDisplay} but the verification failed. ${extractedText?.documents.reason_of_verification_failure ? `Reason: ${extractedText.documents.reason_of_verification_failure}` : ''}`;
     setChatContext(context);
+  };
+
+  // Company URL verification handler
+  const handleUrlCheck = async () => {
+    setUrlUploading(true);
+    setUrlExtractedText(null);
+    setUrlSubmitted(false);
+    setUrlSaved(false);
+    setUploadError(null);
+    setUrlError(null);
+    try {
+      const response = await fetch('http://localhost:8000/url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: companyUrl }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      console.log(result.message.length);
+      if (result.message.length > 0) {
+        let jsonArr: UrlCheckResult[] = result.message;
+        console.log(jsonArr[0]['sop_rule']);
+        console.log(result.message);
+        setUrlExtractedText(jsonArr);
+        setUrlSubmitted(true);
+      } else {
+        setUrlError("No url text extracted or an error occurred.");
+      }
+    } catch (error) {
+      setUrlError(error instanceof Error ? error.message : 'Failed to process URL');
+    } finally {
+      setUrlUploading(false);
+    }
   };
 
   return (
@@ -517,14 +560,101 @@ const CompanyDocuments = () => {
                 </div>
               </div>
             {/* </div> */}
-          </motion.div>
-        </main>
+            
+          {/* Company URL Section */}
+          <div className="bg-gray-50 shadow rounded-lg p-8 mb-6">
+            <div className="space-y-6">
+              <div>
+                <Label className="text-sm font-medium text-gray-600">Company Website URL</Label>
+                <div className="mt-1 flex items-center space-x-2">
+                  <Input
+                    type="url"
+                    placeholder="https://company.com"
+                    value={companyUrl}
+                    onChange={e => setCompanyUrl(e.target.value)}
+                    disabled={urlUploading}
+                  />
+                  <Button
+                    variant="outline"
+                    className="text-teal-500 border-teal-500 hover:bg-teal-50 h-12 bg-white"
+                    type="button"
+                    disabled={urlUploading || !companyUrl}
+                    onClick={handleUrlCheck}
+                  >
+                    {urlUploading ? 'Checking...' : 'Check'}
+                  </Button>
+                </div>
+              </div>
+              {urlError && (
+                <p className="text-xs text-red-500 mt-1">
+                  {urlError}
+                </p>
+              )}
+              {urlSaved && (
+                <div className="mt-4 p-4 rounded-md bg-green-100 text-gray-800">
+                  <p className="font-semibold flex items-center gap-2">
+                    <span>✓</span> URL check saved successfully
+                  </p>
+                </div>
+              )}
+              
+              {!urlSaved && urlSubmitted && urlExtractedText && (
+                urlExtractedText.length === 0 ? (
+                  <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                    <p className="font-semibold mb-2 flex items-center gap-2">
+                      <span>💡</span> SOP Compliance Check Results
+                    </p>
+                    <p>No SOP rules found.</p>
+                  </div>
+                ) : (
+                  <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                    <p className="font-semibold mb-2 flex items-center gap-2">
+                      <span>💡</span> SOP Compliance Check Results
+                    </p>
+                    <div>
+                      {urlExtractedText.map((item, idx) => (
+                        <div key={idx} className="mb-4 p-2 border rounded">
+                          <div><strong>SOP Rule:</strong> {item['sop_rule']}</div>
+                          <div><strong>Status:</strong> {item['status']}</div>
+                          <div>
+                            <strong>Violations:</strong>
+                            {item.violations.length === 0
+                              ? <span> None</span>
+                              : (
+                                <ul className="list-disc pl-5">
+                                  {item.violations.map((v, i) => <li key={i}>{v}</li>)}
+                                </ul>
+                              )
+                            }
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
+              <div className="flex justify-end pt-4">
+                <Button
+                  className="bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 rounded-md"
+                  onClick={() => {
+                    setUrlSaved(true);
+                    setUrlSubmitted(false);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+        </motion.div>
+      </main>
 
-        {/* ChatBox component */}
-        <div className={`chatbox ${isChatboxOpen ? 'active' : ''}`}>
-          <ChatBox initialMessage={chatContext} />
-        </div>
+      {/* ChatBox component */}
+      <div className={`chatbox ${isChatboxOpen ? 'active' : ''}`}>
+        <ChatBox initialMessage={chatContext} />
       </div>
+    </div>
     </div>
   );
 };
