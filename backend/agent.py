@@ -16,10 +16,57 @@ import time
 from firecrawl import FirecrawlApp
 import json
 from urllib.parse import urlparse
-
-
+import re
+from typing import TypedDict
 
 llm = ChatOpenAI(model="gpt-4.1-mini", temperature=.3) 
+
+
+class AIErrorExplanation(TypedDict):
+    reason: str
+    solution: str
+
+
+def error_handler_agent(error_message:str):
+
+    with open("api_doc.txt", "r") as f:    api_doc = f.read()
+    structured_llm = llm.with_structured_output(AIErrorExplanation)
+
+    prompt = f"""
+        You are an expert API debugging assistant. Your job is to explain API errors and provide clear solutions.
+
+        You will be given:
+        - API documentation
+        - API backend code
+        - The error message returned by the API
+
+        Your task:
+        - Identify the most likely cause of the error.
+        - Suggest what was missing or incorrect in the request.
+        - Provide a specific and helpful solution.
+
+        Respond ONLY in the following JSON format:
+
+        {{
+        "reason": "Short explanation of why the error occurred.",
+        "solution": "What the user or client should change to fix the issue."
+        }}
+
+        Here is the API documentation:
+        ---
+        {api_doc}
+        ---
+
+        Here is the error message:
+        ---
+        {error_message}
+        ---
+    """
+    response = structured_llm.invoke(prompt)
+
+    print(response)
+    return response
+
 
 def save_llms_data(url):
     try:
@@ -46,9 +93,6 @@ def save_llms_data(url):
         print(f"Error fetching data: {e}")
 
 
-
-
-
 def url_agent(url: str):
     
     # firecrawl_llm_txt(url)
@@ -63,47 +107,47 @@ def url_agent(url: str):
     # print("website_content\n", website_content, "\n\n")
     # Step 4: Prepare prompt for LLM
     prompt = f"""
-    You are an SOP compliance checker.
+        You are an SOP compliance checker.
 
-    **Standard Operating Procedure (SOP) Rules:**
-    {sop_rules}
+        **Standard Operating Procedure (SOP) Rules:**
+        {sop_rules}
 
-    **Website Content Overview from {url}:**
-    {website_content}
+        **Website Content Overview from {url}:**
+        {website_content}
 
-    **Task:** Based on the provided SOP rules, analyze the content from the website and determine if it fully complies with the rules specified. 
-    Please evaluate each rule carefully and provide a JSON response that details the outcome of your evaluation.
+        **Task:** Based on the provided SOP rules, analyze the content from the website and determine if it fully complies with the rules specified. 
+        Please evaluate each rule carefully and provide a JSON response that details the outcome of your evaluation.
 
-    **Response Format (Strictly in JSON):**
-    {{
-        "sop_rule": "<SOP Rule Name>",
-        "status": "<success or failure>",
-        "violations": [<List of descriptions for each violation, if any>]
-    }}
+        **Response Format (Strictly in JSON):**
+        {{
+            "sop_rule": "<SOP Rule Name>",
+            "status": "<success or failure>",
+            "violations": [<List of descriptions for each violation, if any>]
+        }}
 
-    1. **sop_rule**: The name or description of the SOP rule being checked.
-    2. **status**: Should be either `"success"` (if the rule is satisfied) or `"failure"` (if the rule is violated).
-    3. **violations**: A list of violation descriptions (only included if the status is `"failure"`).
+        1. **sop_rule**: The name or description of the SOP rule being checked.
+        2. **status**: Should be either `"success"` (if the rule is satisfied) or `"failure"` (if the rule is violated).
+        3. **violations**: A list of violation descriptions (only included if the status is `"failure"`).
 
-    **Example:**
-    If the website does not comply with a rule:
-    {{
-        "sop_rule": "Validate Structure",
-        "status": "failure",
-        "violations": [
-            "Missing domain reference in the llms.txt file.",
-            "The 'Contact Us' page is not included in the website content."
+        **Example:**
+        If the website does not comply with a rule:
+        {{
+            "sop_rule": "Validate Structure",
+            "status": "failure",
+            "violations": [
+                "Missing domain reference in the llms.txt file.",
+                "The 'Contact Us' page is not included in the website content."
+            ]
+        }}
+
+        If the website fully complies with the SOP rule:
+        [{{
+            "sop_rule": "Validate Structure",
+            "status": "success",
+            "violations": []
+        }}, ...
         ]
-    }}
-
-    If the website fully complies with the SOP rule:
-    [{{
-        "sop_rule": "Validate Structure",
-        "status": "success",
-        "violations": []
-    }}, ...
-    ]
-    Please proceed to evaluate the website's content against the SOP rules and provide your response strictly in the format shown above.
+        Please proceed to evaluate the website's content against the SOP rules and provide your response strictly in the format shown above.
     """
 
 
@@ -115,12 +159,6 @@ def url_agent(url: str):
     result = json.loads(response.content)
     # result = response.content
     return result
-
-
-
-
-
-
 
 
 

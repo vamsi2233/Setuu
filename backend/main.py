@@ -5,9 +5,13 @@ import shutil
 import traceback
 import os
 import uuid
-from pydantic import BaseModel
-from backend.agent import get_base64_image, process_images_with_gpt, convert_pdf_to_images, chat_agent, url_agent, save_llms_data
+from pydantic import BaseModel,Field, EmailStr
+from agent import get_base64_image, process_images_with_gpt, convert_pdf_to_images, chat_agent, url_agent, save_llms_data, error_handler_agent
 from dotenv import load_dotenv
+from typing import List, Optional
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.requests import Request
+from fastapi.exceptions import RequestValidationError
 load_dotenv()
 
 class ChatRequest(BaseModel):
@@ -87,3 +91,54 @@ async def upload_file(file: UploadFile = File(...), description: str = Form(...)
         if file_ext == "pdf" and os.path.exists("pdf_pages"):
             shutil.rmtree("pdf_pages")
 
+
+
+# test apis 
+# Models
+class Aadhaar(BaseModel):
+    number: str = Field(..., min_length=12, max_length=12)
+    linked_mobile: str  # This is required!
+
+class Document(BaseModel):
+    type: str
+    file_url: str
+
+class KYC(BaseModel):
+    pan_number: str
+    aadhaar: Aadhaar
+    documents: List[Document]
+
+class User(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+class OnboardingRequest(BaseModel):
+    user: User
+    kyc: KYC
+    referral_code: Optional[str] = None
+
+@app.post("/onboarding")
+def submit_onboarding(data: OnboardingRequest):
+    return {
+        "message": f"User {data.user.name} onboarded successfully!"
+    }
+
+@app.exception_handler(RequestValidationError)
+async def custom_validation_exception_handler(request: Request, exc: RequestValidationError):
+    path = request.url.path
+    method = request.method
+
+    # Optional: Print or log
+    print(f"Validation error on {method} {path}")
+
+    # Example: Custom logic for /onboarding
+    if path == "/onboarding":
+        # Use specific doc/schema for onboarding
+        api_doc = "POST /onboarding requires user {...}, kyc {...}"
+
+        ai_response = error_handler_agent(error_message=exc.errors())
+        return JSONResponse(status_code=422, content=ai_response)
+
+    # Fallback: Default FastAPI handler
+    return await request_validation_exception_handler(request, exc)
