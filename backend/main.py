@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form, Header
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import shutil
@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from typing import List, Optional
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.requests import Request
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, HTTPException
 load_dotenv()
 
 class ChatRequest(BaseModel):
@@ -123,6 +123,43 @@ def submit_onboarding(data: OnboardingRequest):
     return {
         "message": f"User {data.user.name} onboarded successfully!"
     }
+HARDCODED_TOKEN = "Bearer ABCD1234"
+
+@app.get("/validate-token")
+async def validate_token(request: Request, authorization: str = Header(...)):
+    if authorization == HARDCODED_TOKEN:
+        return {"valid": True, "message": "✅ You are authorized."}
+
+    # ❌ Invalid token, send error to AI agent
+    error_message = f"Token `{authorization}` is invalid or unauthorized."
+
+    ai_response = error_handler_agent(
+        error_message=error_message,
+        api_doc="This API expects a valid bearer token in the Authorization header. Format: 'Bearer <token>'.",
+        api_code="{ 'Authorization': 'Bearer <token>' }"
+    )
+
+    return JSONResponse(status_code=401, content=ai_response)
+
+# api ai reponse handling
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    # Only handle token-related errors (401/403), skip others if needed
+    path = request.url.path
+    method = request.method
+
+    print(f"HTTP Exception on {method} {path}")
+
+    if path == "/validate-token":
+        api_doc_file = "api_token_doc.txt"
+        ai_response = error_handler_agent(
+            api_doc_file=api_doc_file,
+            error_message=exc.errors(),
+        )
+        return JSONResponse(status_code=exc.status_code, content=ai_response)
+
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 
 @app.exception_handler(RequestValidationError)
 async def custom_validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -134,10 +171,8 @@ async def custom_validation_exception_handler(request: Request, exc: RequestVali
 
     # Example: Custom logic for /onboarding
     if path == "/onboarding":
-        # Use specific doc/schema for onboarding
-        api_doc = "POST /onboarding requires user {...}, kyc {...}"
-
-        ai_response = error_handler_agent(error_message=exc.errors())
+        api_doc_file = "api_form_doc.txt"
+        ai_response = error_handler_agent(error_message=exc.errors(), api_doc_file=api_doc_file)
         return JSONResponse(status_code=422, content=ai_response)
 
     # Fallback: Default FastAPI handler

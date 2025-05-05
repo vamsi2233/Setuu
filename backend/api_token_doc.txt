@@ -1,0 +1,53 @@
+### OAuth Token Authentication (Recommended)
+
+Setu supports OAuth keys for authenticating API requests across multiple product configurations.
+
+**Steps to Generate OAuth Keys:**
+1. Log in to Bridge as an Admin.
+2. Go to "Org settings" → API keys → OAuth tab.
+3. Click “Generate your first key”:
+   - Select environment: sandbox or production.
+   - Set a key name for easy identification.
+   - Add products to associate the key with.
+4. Click "Generate key" to receive:
+   - `clientID`
+   - `secret`
+
+**Use the following API to generate a token:**
+
+`POST https://uat.setu.co/api/v2/auth/token`
+
+Request body:
+```json
+{
+  "clientID": "<your-client-id>",
+  "secret": "<your-secret>"
+}
+
+
+
+### JWT Token Authentication
+
+Setu allows product-specific API authentication via JWT keys. These are auto-generated and tightly scoped.
+
+**Key Characteristics:**
+- One JWT key per **product configuration**.
+- JWT key includes:
+  - `schemeID`
+  - `secret`
+- Environment-specific: a sandbox key cannot be used for production and vice versa.
+- JWT keys are not reusable across products.
+
+**Steps to Get JWT Keys:**
+1. Login to [Bridge](https://bridge.setu.co) as an Admin.
+2. Go to **Org settings → API Keys → JWT**.
+3. You’ll see:
+   - Each key labeled with the product configuration name.
+   - The associated `schemeID` and `secret`.
+4. Alternatively, open a product under “Configured Products” and click the **⚙ settings icon** to view the JWT key for that product.
+
+**Usage:**
+- Use the `schemeID` and `secret` to construct and sign a JWT token.
+- Include it in the Authorization header:
+```http
+Authorization: Bearer <your-jwt-token>

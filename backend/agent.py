@@ -27,9 +27,9 @@ class AIErrorExplanation(TypedDict):
     solution: str
 
 
-def error_handler_agent(error_message:str):
+def error_handler_agent(error_message:str, api_doc_file:str):
 
-    with open("api_doc.txt", "r") as f:    api_doc = f.read()
+    with open(doc_file, "r") as f:    api_doc = f.read()
     structured_llm = llm.with_structured_output(AIErrorExplanation)
 
     prompt = f"""
