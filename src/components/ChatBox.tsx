@@ -1,20 +1,43 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from './ui/button';
 
-const ChatBox = () => {
-  const [query, setQuery] = useState('');
-  const [messages, setMessages] = useState<
-    { role: 'user' | 'assistant'; content: string }[]
-  >([]);
-  const [loading, setLoading] = useState(false);
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
-  const handleSendQuery = async () => {
-    if (query.trim() === '') return;
+interface ChatBoxProps {
+  initialMessage: string | null;
+}
+
+const ChatBox: React.FC<ChatBoxProps> = ({ initialMessage }) => {
+  const [query, setQuery] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]); // Scroll when messages change or loading state changes
+
+  // Handle initial message when it changes
+  useEffect(() => {
+    if (initialMessage) {
+      handleSendQuery(initialMessage);
+    }
+  }, [initialMessage]);
+
+  const handleSendQuery = async (messageText: string) => {
+    if (messageText.trim() === '') return;
 
     // Add user message to messages
-    const userMessage = { role: 'user', content: query };
+    const userMessage: ChatMessage = { role: 'user', content: messageText };
     setMessages(prev => [...prev, userMessage]);
     setQuery('');
     setLoading(true);
@@ -25,23 +48,23 @@ const ChatBox = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query: messageText }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        const botMessage = { role: 'assistant', content: data.message };
+        const botMessage: ChatMessage = { role: 'assistant', content: data.message };
         setMessages(prev => [...prev, botMessage]);
       } else {
         setMessages(prev => [
           ...prev,
-          { role: 'assistant', content: 'Something went wrong. Please try again.' },
+          { role: 'assistant', content: 'Something went wrong. Please try again.' } as ChatMessage,
         ]);
       }
     } catch (error) {
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'An error occurred. Please check your connection.' },
+        { role: 'assistant', content: 'An error occurred. Please check your connection.' } as ChatMessage,
       ]);
     }
 
@@ -69,13 +92,22 @@ const ChatBox = () => {
             <p>Get started with Setu! Ask your onboarding-related question.</p>
           </div>
         ) : (
-          messages.map((msg, idx) => (
-            <div key={idx} className={`p-2 rounded-lg max-w-[90%] ${msg.role === 'user' ? 'bg-blue-100 self-end' : 'bg-gray-200 self-start'}`}>
-              <p className="text-sm text-gray-800">{msg.content}</p>
-            </div>
-          ))
+          <>
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`p-3 rounded-lg max-w-[85%] break-words whitespace-pre-wrap ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-100 text-gray-800' 
+                    : 'bg-gray-200 text-gray-800'
+                }`}>
+                  <p className="text-sm">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            {loading && <p className="text-gray-400 italic text-sm">Setu is typing...</p>}
+            <div ref={messagesEndRef} /> {/* Scroll anchor */}
+          </>
         )}
-        {loading && <p className="text-gray-400 italic text-sm">Setu is typing...</p>}
       </div>
 
       {/* Chat Input */}
@@ -92,9 +124,9 @@ const ChatBox = () => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 p-2 text-gray-700 border rounded-lg focus:outline-none"
-            onKeyDown={(e) => e.key === 'Enter' && handleSendQuery()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSendQuery(query)}
           />
-          <Button variant="ghost" size="sm" className="w-10 h-10 p-0 bg-white hover:bg-gray-100" onClick={handleSendQuery}>
+          <Button variant="ghost" size="sm" className="w-10 h-10 p-0 bg-white hover:bg-gray-100" onClick={() => handleSendQuery(query)}>
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12l14-9v18l-14-9z" />
             </svg>

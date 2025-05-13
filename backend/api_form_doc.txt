@@ -1,0 +1,26 @@
+POST /onboarding
+
+This endpoint registers a new user and submits KYC information.
+
+Required JSON body format:
+{
+  "user": {
+    "name": string,
+    "email": string (valid email),
+    "password": string
+  },
+  "kyc": {
+    "pan_number": string,
+    "aadhaar": {
+      "number": string (12-digit),
+      "linked_mobile": string
+    },
+    "documents": [
+      {
+        "type": string,
+        "file_url": string (URL)
+      }
+    ]
+  },
+  "referral_code": string (optional)
+}

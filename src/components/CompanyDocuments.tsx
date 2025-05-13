@@ -10,18 +10,44 @@ import { Label } from './ui/label';
 import ChatBox from './ChatBox';
 import '../styles/responsive.css';
 
+interface DocumentResponse {
+  type: string;
+  name_of_entity: string;
+  names_of_directors?: string[];
+  reason_of_verification_failure?: string;
+}
+
+interface ExtractedText {
+  documents: DocumentResponse;
+}
+
+interface UrlCheckResult {
+  "sop rule": string;
+  status: string;
+  violations: string[];
+}
+
 const CompanyDocuments = () => {
   const [gstSubmitted, setgstSubmitted] = useState(false);
   const [proofSubmitted, setproofSubmitted] = useState(false);
-  const [gstCertificate, setGSTCertificate] = useState<null>(null);
+  const [gstCertificate, setGSTCertificate] = useState<File | null>(null);
   const [proofDocument, setProofDocument] = useState<File | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isChatboxOpen, setIsChatboxOpen] = useState(false);
   const [gstUploading, setgstUploading] = useState(false);
   const [proofUploading, setproofUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [gstExtractedText, setGstExtractedText] = useState<string | null>(null);
-  const [proofExtractedText, setProofExtractedText] = useState<string | null>(null);
+  const [gstExtractedText, setGstExtractedText] = useState<ExtractedText | null>(null);
+  const [proofExtractedText, setProofExtractedText] = useState<ExtractedText | null>(null);
+  const [gstSaved, setGstSaved] = useState(false);
+  const [proofSaved, setProofSaved] = useState(false);
+  const [chatContext, setChatContext] = useState<string | null>(null);
+  const [companyUrl, setCompanyUrl] = useState('');
+  const [urlUploading, setUrlUploading] = useState(false);
+  const [urlExtractedText, setUrlExtractedText] = useState<UrlCheckResult[] | null>(null);
+  const [urlSubmitted, setUrlSubmitted] = useState(false);
+  const [urlSaved, setUrlSaved] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'gst' | 'proof') => {
     const file = event.target.files?.[0];
@@ -38,6 +64,7 @@ const CompanyDocuments = () => {
       setUploadError(null);
       setgstSubmitted(false);
       setGstExtractedText(null);
+      setGstSaved(false);
 
       try {
         const formData = new FormData();
@@ -49,28 +76,34 @@ const CompanyDocuments = () => {
           body: formData,
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
         if (result.status === "success") {
           if (result.text) {
-            // Clean the response text by removing markdown formatting
-            let cleanText = result.text;
-            if (cleanText.startsWith("```json")) {
-              cleanText = cleanText.replace(/```json\n?/, "").replace(/\n?```$/, "");
+            try {
+              let cleanText = result.text;
+              if (cleanText.startsWith("```json")) {
+                cleanText = cleanText.replace(/```json\n?/, "").replace(/\n?```$/, "");
+              }
+              const jsonObj = JSON.parse(cleanText) as ExtractedText;
+              setGstExtractedText(jsonObj);
+              setgstSubmitted(true);
+            } catch (parseError) {
+              console.error('JSON parsing error:', parseError);
+              setUploadError("Error parsing the response");
             }
-            // Parse and re-stringify to ensure proper JSON formatting
-            const jsonObj = JSON.parse(cleanText);
-            // const formattedJson = JSON.stringify(jsonObj, null, 4);
-            setGstExtractedText(jsonObj);
-            setgstSubmitted(true); 
           } else {
-            setUploadError("No text extracted or an error occurred.");
+            setUploadError("No gst text extracted or an error occurred.");
           }
         } else {
           setUploadError("Error: Something went wrong.");
         }
       } catch (error) {
+        console.error('Upload error:', error);
         setUploadError(error instanceof Error ? error.message : 'Failed to upload file');
-        setgstSubmitted(true);
       } finally {
         setgstUploading(false);
       }
@@ -80,42 +113,102 @@ const CompanyDocuments = () => {
       setUploadError(null);
       setproofSubmitted(false);
       setProofExtractedText(null);
+      setProofSaved(false);
 
       try {
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('description', 'not gst certificate');
+        formData.append('description', 'Registration certificate');
 
         const response = await fetch('http://localhost:8000/upload', {
           method: 'POST',
           body: formData,
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
         if (result.status === "success") {
           if (result.text) {
-            // Clean the response text by removing markdown formatting
-            let cleanText = result.text;
-            if (cleanText.startsWith("```json")) {
-              cleanText = cleanText.replace(/```json\n?/, "").replace(/\n?```$/, "");
+            try {
+              let cleanText = result.text;
+              if (cleanText.startsWith("```json")) {
+                cleanText = cleanText.replace(/```json\n?/, "").replace(/\n?```$/, "");
+              }
+              const jsonObj = JSON.parse(cleanText) as ExtractedText;
+              setProofExtractedText(jsonObj);
+              setproofSubmitted(true);
+            } catch (parseError) {
+              console.error('JSON parsing error:', parseError);
+              setUploadError("Error parsing the response");
             }
-            // Parse and re-stringify to ensure proper JSON formatting
-            const jsonObj = JSON.parse(cleanText);
-            // const formattedJson = JSON.stringify(jsonObj, null, 4);
-            setProofExtractedText(jsonObj);
-            setproofSubmitted(true);
           } else {
-            setUploadError("No text extracted or an error occurred.");
+            setUploadError("No proof of business text extracted or an error occurred.");
           }
         } else {
           setUploadError("Error: Something went wrong.");
         }
       } catch (error) {
+        console.error('Upload error:', error);
         setUploadError(error instanceof Error ? error.message : 'Failed to upload file');
-        setproofSubmitted(true);
       } finally {
         setproofUploading(false);
       }
+    }
+  };
+
+  const handleSave = (section: 'gst' | 'proof') => {
+    if (section === 'gst') {
+      setGstSaved(true);
+      setgstSubmitted(false);
+    } else {
+      setProofSaved(true);
+      setproofSubmitted(false);
+    }
+  };
+
+  const handleTalkToSetu = (documentType: 'gst' | 'proof') => {
+    setIsChatboxOpen(true);
+    const extractedText = documentType === 'gst' ? gstExtractedText : proofExtractedText;
+    const fileName = documentType === 'gst' ? gstCertificate?.name : proofDocument?.name;
+    const documentTypeDisplay = documentType === 'gst' ? 'GST certificate' : 'proof of business document';
+    
+    const context = `I uploaded ${fileName} as ${documentTypeDisplay} but the verification failed. ${extractedText?.documents.reason_of_verification_failure ? `Reason: ${extractedText.documents.reason_of_verification_failure}` : ''}`;
+    setChatContext(context);
+  };
+
+  // Company URL verification handler
+  const handleUrlCheck = async () => {
+    setUrlUploading(true);
+    setUrlExtractedText(null);
+    setUrlSubmitted(false);
+    setUrlSaved(false);
+    setUploadError(null);
+    setUrlError(null);
+    try {
+      const response = await fetch('http://localhost:8000/url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: companyUrl }),
+      });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const result = await response.json();
+      console.log(result.message.length);
+      if (result.message.length > 0) {
+        let jsonArr: UrlCheckResult[] = result.message;
+        console.log(jsonArr[0]['sop_rule']);
+        console.log(result.message);
+        setUrlExtractedText(jsonArr);
+        setUrlSubmitted(true);
+      } else {
+        setUrlError("No url text extracted or an error occurred.");
+      }
+    } catch (error) {
+      setUrlError(error instanceof Error ? error.message : 'Failed to process URL');
+    } finally {
+      setUrlUploading(false);
     }
   };
 
@@ -234,7 +327,7 @@ const CompanyDocuments = () => {
                               <span>Uploading...</span>
                             </div>
                           ) : (
-                            gstCertificate ? gstCertificate.name : 'No file chosen'
+                            gstCertificate?.name || 'No file chosen'
                           )}
                         </div>
                         <Button 
@@ -252,45 +345,64 @@ const CompanyDocuments = () => {
                           {uploadError}
                         </p>
                       )}
-                        {gstSubmitted && (gstExtractedText?.documents?.type !== "unknown" ? (
-                            <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
-                            <p className="font-semibold mb-2 flex items-center gap-2">
-                                <span>💡</span> The verification was successful
+                        {gstSaved && (
+                          <div className="mt-4 p-4 rounded-md bg-green-100 text-gray-800">
+                            <p className="font-semibold flex items-center gap-2">
+                              <span>✓</span> Document saved successfully
                             </p>
-                            <p className="mb-1 text-sm pl-8 mt-2">
-                                ☑️ <span className="font-medium">Document Identified:</span> {gstExtractedText.documents.type}
-                            </p>
-                            <p className="mb-1 text-sm pl-8">
-                                ☑️ <span className="font-medium">Fields Extracted</span>
-                            </p>
-                            <p className="ml-6 text-sm pl-8">
-                                <span className="font-medium">Name:</span> {gstExtractedText.documents.name_of_entity || "N/A"}
-                            </p>
-                            {gstExtractedText.documents.names_of_directors?.length > 0 && (
-                                <p className="ml-6 text-sm pl-8">
-                                <span className="font-medium">Directors:</span>{" "}
-                                {gstExtractedText.documents.names_of_directors.join(", ")}
-                                </p>
-                            )}
-                            </div>
-                        ) : (
+                          </div>
+                        )}
+                        {!gstSaved && gstSubmitted && gstExtractedText && (
+                          gstExtractedText.documents.type === "unknown" || 
+                          (gstExtractedText.documents.reason_of_verification_failure && gstExtractedText.documents.type !== "GST") ? (
                             <div className="mt-4 p-4 rounded-md bg-red-100 text-gray-800 relative">
-                            <p className="font-semibold mb-2 flex items-center gap-2">
-                                <span>❌</span> The verification was unsuccessful
-                            </p>
-                            <ul className="list-disc pl-8 text-sm space-y-1 mt-2">
-                                <li>
-                                <span className="font-medium">Document Identified:</span> Failed
-                                </li>
-                                <li>
-                                <span className="font-medium">Fields Extracted:</span> None
-                                </li>
-                            </ul>
-                            <button className="absolute bottom-4 right-4 bg-gray-800 text-white px-4 py-1 rounded hover:bg-gray-700">
+                              <div className="pr-32">
+                                <p className="font-semibold mb-2 flex items-center gap-2">
+                                  <span>❌</span> The verification was unsuccessful
+                                </p>
+                                <ul className="list-disc pl-8 text-sm space-y-1 mt-2">
+                                  <li>
+                                    <span className="font-medium">Document Identified:</span> {gstExtractedText.documents.type === "unknown" ? "Failed" : gstExtractedText.documents.type}
+                                  </li>
+                                  <li>
+                                    <span className="font-medium">Fields Extracted:</span> {gstExtractedText.documents.name_of_entity ? "Name" : "None"}
+                                  </li>
+                                  {gstExtractedText.documents.reason_of_verification_failure && (
+                                    <li className="break-words">
+                                      <span className="font-medium">Reason:</span> {gstExtractedText.documents.reason_of_verification_failure}
+                                    </li>
+                                  )}
+                                </ul>
+                              </div>
+                              <button 
+                                className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-gray-800 text-white px-4 py-1 rounded hover:bg-gray-700"
+                                onClick={() => handleTalkToSetu('gst')}
+                              >
                                 Talk to Setu
-                            </button>
+                              </button>
                             </div>
-                        )
+                          ) : (
+                            <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                              <p className="font-semibold mb-2 flex items-center gap-2">
+                                <span>💡</span> The verification was successful
+                              </p>
+                              <p className="mb-1 text-sm pl-8 mt-2">
+                                ☑️ <span className="font-medium">Document Identified:</span> {gstExtractedText.documents.type}
+                              </p>
+                              <p className="mb-1 text-sm pl-8">
+                                ☑️ <span className="font-medium">Fields Extracted</span>
+                              </p>
+                              <p className="ml-6 text-sm pl-8">
+                                <span className="font-medium">Name:</span> {gstExtractedText.documents.name_of_entity || "N/A"}
+                              </p>
+                              {gstExtractedText.documents.names_of_directors && gstExtractedText.documents.names_of_directors.length > 0 && (
+                                <p className="ml-6 text-sm pl-8">
+                                  <span className="font-medium">Directors:</span>{" "}
+                                  {gstExtractedText.documents.names_of_directors.join(", ")}
+                                </p>
+                              )}
+                            </div>
+                          )
                         )}
 
                         {!gstCertificate && (
@@ -301,7 +413,10 @@ const CompanyDocuments = () => {
                     </div>
 
                 <div className="flex justify-end pt-4">
-                  <Button className="bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 rounded-md">
+                  <Button 
+                    className="bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 rounded-md"
+                    onClick={() => handleSave('gst')}
+                  >
                     Save
                   </Button>
                 </div>
@@ -349,7 +464,7 @@ const CompanyDocuments = () => {
                           <span>Uploading...</span>
                         </div>
                       ) : (
-                        proofDocument ? proofDocument.name : 'No file chosen'
+                        proofDocument?.name || 'No file chosen'
                       )}
                     </div>
                     <Button 
@@ -367,46 +482,65 @@ const CompanyDocuments = () => {
                       {uploadError}
                     </p>
                   )}
-                    {proofSubmitted && (proofExtractedText?.documents?.type !== "unknown" ? (
-                            <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                    {proofSaved && (
+                      <div className="mt-4 p-4 rounded-md bg-green-100 text-gray-800">
+                        <p className="font-semibold flex items-center gap-2">
+                          <span>✓</span> Document saved successfully
+                        </p>
+                      </div>
+                    )}
+                    {!proofSaved && proofSubmitted && proofExtractedText && (
+                      proofExtractedText.documents.type === "unknown" || 
+                      (proofExtractedText.documents.reason_of_verification_failure && !["COI", "Registration certificate"].includes(proofExtractedText.documents.type)) ? (
+                        <div className="mt-4 p-4 rounded-md bg-red-100 text-gray-800 relative">
+                          <div className="pr-32">
                             <p className="font-semibold mb-2 flex items-center gap-2">
-                                <span>💡</span> The verification was successful
-                            </p>
-                            <p className="mb-1 text-sm pl-8 mt-2">
-                                ☑️ <span className="font-medium">Document Identified:</span> {proofExtractedText.documents.type}
-                            </p>
-                            <p className="mb-1 text-sm pl-8">
-                                ☑️ <span className="font-medium">Fields Extracted</span>
-                            </p>
-                            <p className="ml-6 text-sm pl-8">
-                                <span className="font-medium">Name:</span> {proofExtractedText.documents.name_of_entity || "N/A"}
-                            </p>
-                            {proofExtractedText.documents.names_of_directors?.length > 0 && (
-                                <p className="ml-6 text-sm pl-8">
-                                <span className="font-medium">Directors:</span>{" "}
-                                {proofExtractedText.documents.names_of_directors.join(", ")}
-                                </p>
-                            )}
-                            </div>
-                        ) : (
-                            <div className="mt-4 p-4 rounded-md bg-red-100 text-gray-800 relative">
-                            <p className="font-semibold mb-2 flex items-center gap-2">
-                                <span>❌</span> The verification was unsuccessful
+                              <span>❌</span> The verification was unsuccessful
                             </p>
                             <ul className="list-disc pl-8 text-sm space-y-1 mt-2">
-                                <li>
-                                <span className="font-medium">Document Identified:</span> Failed
+                              <li>
+                                <span className="font-medium">Document Identified:</span> {proofExtractedText.documents.type === "unknown" ? "Failed" : proofExtractedText.documents.type}
+                              </li>
+                              <li>
+                                <span className="font-medium">Fields Extracted:</span> {proofExtractedText.documents.name_of_entity ? "Name" : "None"}
+                              </li>
+                              {proofExtractedText.documents.reason_of_verification_failure && (
+                                <li className="break-words">
+                                  <span className="font-medium">Reason:</span> {proofExtractedText.documents.reason_of_verification_failure}
                                 </li>
-                                <li>
-                                <span className="font-medium">Fields Extracted:</span> None
-                                </li>
+                              )}
                             </ul>
-                            <button className="absolute bottom-4 right-4 bg-gray-800 text-white px-4 py-1 rounded hover:bg-gray-700">
-                                Talk to Setu
-                            </button>
-                            </div>
-                        )
-                        )}
+                          </div>
+                          <button 
+                            className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-gray-800 text-white px-4 py-1 rounded hover:bg-gray-700"
+                            onClick={() => handleTalkToSetu('proof')}
+                          >
+                            Talk to Setu
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                          <p className="font-semibold mb-2 flex items-center gap-2">
+                            <span>💡</span> The verification was successful
+                          </p>
+                          <p className="mb-1 text-sm pl-8 mt-2">
+                            ☑️ <span className="font-medium">Document Identified:</span> {proofExtractedText.documents.type}
+                          </p>
+                          <p className="mb-1 text-sm pl-8">
+                            ☑️ <span className="font-medium">Fields Extracted</span>
+                          </p>
+                          <p className="ml-6 text-sm pl-8">
+                            <span className="font-medium">Name:</span> {proofExtractedText.documents.name_of_entity || "N/A"}
+                          </p>
+                          {proofExtractedText.documents.names_of_directors && proofExtractedText.documents.names_of_directors.length > 0 && (
+                            <p className="ml-6 text-sm pl-8">
+                              <span className="font-medium">Directors:</span>{" "}
+                              {proofExtractedText.documents.names_of_directors.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                      )
+                    )}
 
                         {!proofDocument && (
                         <p className="text-xs text-gray-500 mt-1">
@@ -417,20 +551,110 @@ const CompanyDocuments = () => {
                 </div>
 
                 <div className="flex justify-end pt-4">
-                  <Button className="bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 rounded-md">
+                  <Button 
+                    className="bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 rounded-md"
+                    onClick={() => handleSave('proof')}
+                  >
                     Save
                   </Button>
                 </div>
               </div>
             {/* </div> */}
-          </motion.div>
-        </main>
+            
+          {/* Company URL Section */}
+          <div className="bg-gray-50 shadow rounded-lg p-8 mb-6">
+            <div className="space-y-6">
+              <div>
+                <Label className="text-sm font-medium text-gray-600">Company Website URL</Label>
+                <div className="mt-1 flex items-center space-x-2">
+                  <Input
+                    type="url"
+                    placeholder="https://company.com"
+                    value={companyUrl}
+                    onChange={e => setCompanyUrl(e.target.value)}
+                    disabled={urlUploading}
+                  />
+                  <Button
+                    variant="outline"
+                    className="text-teal-500 border-teal-500 hover:bg-teal-50 h-12 bg-white"
+                    type="button"
+                    disabled={urlUploading || !companyUrl}
+                    onClick={handleUrlCheck}
+                  >
+                    {urlUploading ? 'Checking...' : 'Check'}
+                  </Button>
+                </div>
+              </div>
+              {urlError && (
+                <p className="text-xs text-red-500 mt-1">
+                  {urlError}
+                </p>
+              )}
+              {urlSaved && (
+                <div className="mt-4 p-4 rounded-md bg-green-100 text-gray-800">
+                  <p className="font-semibold flex items-center gap-2">
+                    <span>✓</span> URL check saved successfully
+                  </p>
+                </div>
+              )}
+              
+              {!urlSaved && urlSubmitted && urlExtractedText && (
+                urlExtractedText.length === 0 ? (
+                  <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                    <p className="font-semibold mb-2 flex items-center gap-2">
+                      <span>💡</span> SOP Compliance Check Results
+                    </p>
+                    <p>No SOP rules found.</p>
+                  </div>
+                ) : (
+                  <div className="mt-4 p-4 rounded-md bg-orange-100 text-gray-800 relative">
+                    <p className="font-semibold mb-2 flex items-center gap-2">
+                      <span>💡</span> SOP Compliance Check Results
+                    </p>
+                    <div>
+                      {urlExtractedText.map((item, idx) => (
+                        <div key={idx} className="mb-4 p-2 border rounded">
+                          <div><strong>SOP Rule:</strong> {item['sop_rule']}</div>
+                          <div><strong>Status:</strong> {item['status']}</div>
+                          <div>
+                            <strong>Violations:</strong>
+                            {item.violations.length === 0
+                              ? <span> None</span>
+                              : (
+                                <ul className="list-disc pl-5">
+                                  {item.violations.map((v, i) => <li key={i}>{v}</li>)}
+                                </ul>
+                              )
+                            }
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              )}
+              <div className="flex justify-end pt-4">
+                <Button
+                  className="bg-teal-500 hover:bg-teal-600 text-white h-11 px-6 rounded-md"
+                  onClick={() => {
+                    setUrlSaved(true);
+                    setUrlSubmitted(false);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+          
+        </motion.div>
+      </main>
 
-        {/* ChatBox component */}
-        <div className={`chatbox ${isChatboxOpen ? 'active' : ''}`}>
-          <ChatBox />
-        </div>
+      {/* ChatBox component */}
+      <div className={`chatbox ${isChatboxOpen ? 'active' : ''}`}>
+        <ChatBox initialMessage={chatContext} />
       </div>
+    </div>
     </div>
   );
 };

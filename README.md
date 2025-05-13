@@ -53,6 +53,7 @@ yarn dev
 
 5. Run the backend agent server on the root directory
  ```bash
+ cd backend
  uvicorn main:app --reload
  ```
 

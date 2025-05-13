@@ -1,0 +1,26 @@
+# Use case 1
+Complex Nested Payload in Signup Flow
+
+# Scenario: Fintech App User Onboarding
+A fintech app requires a detailed signup payload for regulatory compliance (KYC), which includes deeply nested data. The mobile/web frontend must collect and send this to the backend.
+
+# Why This Is a Strong Real-Life Use Case
+- High stakes (onboarding blocked)
+- Payload is deeply nested
+- Frontend teams are split (web, Android, iOS) — often misaligned
+- Many required fields; one missing field = whole request fails
+- Backend team adds strict validation (as they must for compliance)
+- Difficult for frontend to debug or interpret server’s raw error messages
+
+# User Experience:
+- Gets a cryptic 422 error or "Something went wrong"
+- Doesn’t know that “aadhaar.linked_mobile” is missing, or why "aadhaar" should be an object
+- Developer doesn't realize the mobile client’s payload is malformed due to different structure
+
+# What Goes Wrong on the Client Side
+- Web Client: Field Hidden or Mistyped
+- User fills aadhaar number but not linked_mobile — field was hidden unless a checkbox was checked.
+
+# Use case 2
+eloborating api errors
+http://0.0.0.0:8000/token-validation is the endpoint if we input wrong token it responds with ai message suggesting to create token
